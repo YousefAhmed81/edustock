@@ -4,6 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>EduStock - ניהול מלאי בית ספרי | מקיף דבוריה</title>
+  <!-- Zero-FOUC Synchronous Auth Guard: prevents unauthenticated dashboard flash -->
+  <script>
+    (function() {
+      try {
+        var user = sessionStorage.getItem('edustock_current_user') || localStorage.getItem('edustock_current_user');
+        if (!user) {
+          document.documentElement.classList.add('edustock-auth-pending');
+        }
+      } catch (e) {}
+    })();
+  </script>
   <!-- Pure Tailwind CDN with Fallback -->
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <script>
@@ -44,6 +55,20 @@
     /* ======================================================================== */
     html, body, main, .app-view {
       background-color: #090d16 !important;
+    }
+
+    /* Zero-FOUC Instant Authentication Guard: display login instantly when unauthenticated */
+    html.edustock-auth-pending #auth-login-screen {
+      display: flex !important;
+    }
+    html.edustock-auth-pending aside,
+    html.edustock-auth-pending header,
+    html.edustock-auth-pending main,
+    html.edustock-auth-pending #app-sidebar,
+    html.edustock-auth-pending #view-dashboard {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
     }
 
     body {
@@ -15994,7 +16019,7 @@
     // 1. Unified Performer Resolution for Activity & Audit Logs
     window.getAuditPerformerName = function() {
       try {
-        const raw = sessionStorage.getItem('edustock_current_user');
+        const raw = sessionStorage.getItem('edustock_current_user') || localStorage.getItem('edustock_current_user');
         if (raw) {
           const u = JSON.parse(raw);
           if (u && (u.fullName || u.FullName || u.name || u.username)) {
@@ -16093,6 +16118,7 @@
       try {
         localStorage.setItem('edustock_users_db', JSON.stringify(allUsers));
         sessionStorage.setItem('edustock_current_user', JSON.stringify(user));
+        localStorage.setItem('edustock_current_user', JSON.stringify(user));
       } catch (e) {
         console.warn(`Saving password failed:`, e);
       }
@@ -24163,13 +24189,14 @@ window.printDisposalProtocol = function(disposalId) {
 
       // Keep active session user updated with synchronized school ID
       try {
-        const rawSession = sessionStorage.getItem('edustock_current_user');
+        const rawSession = sessionStorage.getItem('edustock_current_user') || localStorage.getItem('edustock_current_user');
         if (rawSession) {
           const sessionUser = JSON.parse(rawSession);
           if (sessionUser && sessionUser.username) {
             const matchedUser = window.db.Users.find(u => u.username.toLowerCase() === sessionUser.username.toLowerCase() || u.id === sessionUser.id);
             if (matchedUser) {
               sessionStorage.setItem('edustock_current_user', JSON.stringify(matchedUser));
+              localStorage.setItem('edustock_current_user', JSON.stringify(matchedUser));
             }
           }
         }
@@ -24189,7 +24216,7 @@ window.printDisposalProtocol = function(disposalId) {
 
     window.getCurrentUser = function() {
       try {
-        const raw = sessionStorage.getItem('edustock_current_user');
+        const raw = sessionStorage.getItem('edustock_current_user') || localStorage.getItem('edustock_current_user');
         if (raw) {
           const user = JSON.parse(raw);
           if (user && user.username) {
@@ -24207,8 +24234,12 @@ window.printDisposalProtocol = function(disposalId) {
     window.setCurrentUser = function(user) {
       if (user) {
         sessionStorage.setItem('edustock_current_user', JSON.stringify(user));
+        localStorage.setItem('edustock_current_user', JSON.stringify(user));
+        document.documentElement.classList.remove('edustock-auth-pending');
       } else {
         sessionStorage.removeItem('edustock_current_user');
+        localStorage.removeItem('edustock_current_user');
+        document.documentElement.classList.add('edustock-auth-pending');
       }
       if (typeof window.enforceSchoolIsolation === 'function') {
         window.enforceSchoolIsolation();
@@ -24220,6 +24251,8 @@ window.printDisposalProtocol = function(disposalId) {
 
     window.logoutUser = function() {
       sessionStorage.removeItem('edustock_current_user');
+      localStorage.removeItem('edustock_current_user');
+      document.documentElement.classList.add('edustock-auth-pending');
       const loginScreen = document.getElementById('auth-login-screen');
       if (loginScreen) {
         loginScreen.style.display = 'flex';
@@ -24277,6 +24310,8 @@ window.printDisposalProtocol = function(disposalId) {
 
       // Login success
       sessionStorage.setItem('edustock_current_user', JSON.stringify(user));
+      localStorage.setItem('edustock_current_user', JSON.stringify(user));
+      document.documentElement.classList.remove('edustock-auth-pending');
       const loginScreen = document.getElementById('auth-login-screen');
       if (loginScreen) {
         loginScreen.style.display = 'none';
@@ -24434,12 +24469,14 @@ window.printDisposalProtocol = function(disposalId) {
       const loginScreen = document.getElementById('auth-login-screen');
 
       if (!user) {
+        document.documentElement.classList.add('edustock-auth-pending');
         if (loginScreen) {
           loginScreen.style.display = 'flex';
         }
         return;
       }
 
+      document.documentElement.classList.remove('edustock-auth-pending');
       if (loginScreen) {
         loginScreen.style.display = 'none';
       }
@@ -24770,6 +24807,7 @@ window.printDisposalProtocol = function(disposalId) {
           const cur = window.getCurrentUser();
           if (cur && cur.id === id) {
             sessionStorage.setItem('edustock_current_user', JSON.stringify(user));
+            localStorage.setItem('edustock_current_user', JSON.stringify(user));
           }
         }
       } else {
@@ -24971,6 +25009,7 @@ window.printDisposalProtocol = function(disposalId) {
       // If resetting own password, update session
       if (currentUser && currentUser.id === userId) {
         sessionStorage.setItem('edustock_current_user', JSON.stringify(user));
+        localStorage.setItem('edustock_current_user', JSON.stringify(user));
       }
 
       window.closeResetPasswordModal();
@@ -26467,6 +26506,14 @@ window.printDisposalProtocol = function(disposalId) {
           />
         </div>
 
+        <!-- Remember Me Checkbox -->
+        <div class="flex items-center justify-between text-xs text-slate-400 pt-1 pb-1">
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="auth-remember-me" checked class="rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-cyan-500/30">
+            <span>זכור אותי במכשיר זה (התחברות קבועה)</span>
+          </label>
+        </div>
+
         <button 
           type="submit" 
           id="btn-auth-submit"
@@ -26477,7 +26524,14 @@ window.printDisposalProtocol = function(disposalId) {
         </button>
       </form>
 
-      
+      <!-- Initial Production Access Credentials Helper -->
+      <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-400 space-y-1.5 text-center">
+        <div class="text-slate-300 font-semibold">פרטי גישה ראשוניים לסביבת ייצור:</div>
+        <div class="flex flex-wrap justify-center items-center gap-2 text-[10.5px]">
+          <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">מנהל-על: <strong class="text-cyan-400 font-mono">admin</strong> / <strong class="text-cyan-400 font-mono">EduAdmin@2026</strong></span>
+          <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">קניין דבוריה: <strong class="text-cyan-400 font-mono">daburiyya</strong> / <strong class="text-cyan-400 font-mono">School@2026</strong></span>
+        </div>
+      </div>
 
       <!-- Security Notice Footer -->
       <div class="text-center text-[10px] text-slate-500">
